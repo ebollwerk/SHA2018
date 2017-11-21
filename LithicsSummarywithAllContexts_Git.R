@@ -120,6 +120,9 @@ ORDER BY
 ')
 write.csv(SpatialData, 'LithicsSpatialData.csv')
 
+#need to rename Quadrat "ECN01"
+SpatialData$QuadratID[SpatialData$QuadratID == "'ECN01 '"] <- "ECN01"
+
 #Remove clean up/out of strat context deposits
 SpatialData <- filter(SpatialData, DepositType != 'Clean-Up/Out-of-Stratigraphic Context'& DepositType != 'Surface Collection')
 
@@ -179,19 +182,15 @@ require(tibble)
 YC_Tri_Coord<-dplyr::rename(YC_Tri_Coord, QuadratID2 = QuadID)
 DataAllSites2<-filter(DataAllSites, UnitType == 'Quadrat/Unit')
 DataAllSites3<-left_join(DataAllSites2, YC_Tri_Coord, by="QuadratID2") %>%
-  add_column(meannorthing="") %>%
-  add_column(meaneasting="")
-
-
-DataAllSites3$meannorthing<-ifelse((DataAllSites3$ProjectID == '1400' | DataAllSites3$ProjectID == '1404'),
+  add_column(meannorthing=ifelse((DataAllSites3$ProjectID == '1400' | DataAllSites3$ProjectID == '1404'),
                                  DataAllSites3$meannorthing.y,
-                                 DataAllSites3$meannorthing.x)
-
-DataAllSites3$meaneasting<-ifelse((DataAllSites3$ProjectID == '1400' | DataAllSites3$ProjectID == '1404'),
+                                DataAllSites3$meannorthing.x)) %>%
+  add_column(meaneasting=ifelse((DataAllSites3$ProjectID == '1400' | DataAllSites3$ProjectID == '1404'),
                                 DataAllSites3$meaneasting.y,
-                                DataAllSites3$meaneasting.x)
+                                DataAllSites3$meaneasting.x))
 
 
+#Select columsn
 DataAllSites4 <-
   select (DataAllSites3, 1:7, 10:13, 16:33, 23:33, 44:45) %>%
   replace_na(list(Biface = 0, Flake = 0.5, Flake_cortical = 0.5, Flake_retouched = 0.5, 
@@ -204,9 +203,34 @@ DataAllSites4 <-
                                 paste('FQ')
                          ))) 
 
+FirstHermGIS<-filter(DataAllSites4, Area == 'FH') %>%
+  na.omit() %>%
+  select(1:3,8:10,17,29:31) 
+
+FirstHermGIS2<-filter(DataAllSites4, Area == 'FH') %>%
+  na.omit() %>%
+  select(1:2, 17, 29)
+
+FirstHermGIS2$QuadratID2<-as.factor(FirstHermGIS2$QuadratID2) 
+
+detach(package:plyr)
+FirstHermGIS3<- FirstHermGIS2 %>%
+  group_by(QuadratID2)%>%
+  summarise(count=sum(Flake))
 
 
+%>%
+  group_by(QuadratID2)%>%
+  summarise(area_quad=max(area),
+            northingdim=max(northingdim),
+            eastingdim=max(eastingdim),
+            meannorthing=max(meannorthing),
+            meaneasting=max(meaneasting))
 
-write.csv(DataAllSites, 'DataAllSites.csv')
+  mutate(FlakeDensity = Flake/area) %>%
+
+
+write.csv(FirstHerm, 'FirstHermFlakes.csv')
+
 
                         
