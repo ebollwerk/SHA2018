@@ -10,6 +10,7 @@ DRCcon<-dbConnect(pgSQL, host=connection$host, port=connection$port,
                   dbname=connection$dbname,
                   user=connection$user, password=connection$password)
 
+
 LithicData<-dbGetQuery(DRCcon,'
 SELECT
 "public"."tblContext"."ContextID",
@@ -166,13 +167,19 @@ DataAllSites$QuadratID2<-ifelse(grepl("TXE5A", DataAllSites$ContextID),
                                                                                                                                            paste(DataAllSites$QuadratID)
                                                                                                                                     )))))))))))))))))
 
+
 #changing spatial coordinates for Triplex and Yard Cabin because they are entered in DAACS using the local MBY datum/
 #grid
 #read in Coordinate data transformed to Plantation Grid
 YC_Tri_Coord<-read.csv(file="YC_TriplexSpatialCoordinatesReassign.csv", header=TRUE, sep=",")
-#Do Northing and Easting Averages like in the query
+#Calculate means of Northing and Easting Averages like in the query
 YC_Tri_Coord<-mutate(YC_Tri_Coord, meannorthing=rowMeans(select(YC_Tri_Coord, contains("Y"))))
 YC_Tri_Coord<-mutate(YC_Tri_Coord, meaneasting=rowMeans(select(YC_Tri_Coord, contains("X"))))
+
+#Calculate northing/easting dimensions and area like in query
+#LEFT OFF HERE 11/21
+#YC_Tri_Coord<-mutate(YC_Tri_Coord, northingdim=(max(select(YC_Tri_Coord, contains("Y")))-min(select(YC_Tri_Coord, contains("Y")))))
+#YC_Tri_Coord<-mutate(YC_Tri_Coord, eastingdim=(max(select(YC_Tri_Coord, contains("X")))-min(select(YC_Tri_Coord, contains("X")))))
 
 require(tibble)
 #merge new Northings and Eastings with original dataset
@@ -182,55 +189,101 @@ require(tibble)
 YC_Tri_Coord<-dplyr::rename(YC_Tri_Coord, QuadratID2 = QuadID)
 DataAllSites2<-filter(DataAllSites, UnitType == 'Quadrat/Unit')
 DataAllSites3<-left_join(DataAllSites2, YC_Tri_Coord, by="QuadratID2") %>%
-  add_column(meannorthing=ifelse((DataAllSites3$ProjectID == '1400' | DataAllSites3$ProjectID == '1404'),
-                                 DataAllSites3$meannorthing.y,
-                                DataAllSites3$meannorthing.x)) %>%
-  add_column(meaneasting=ifelse((DataAllSites3$ProjectID == '1400' | DataAllSites3$ProjectID == '1404'),
-                                DataAllSites3$meaneasting.y,
-                                DataAllSites3$meaneasting.x))
+  add_column(meannorthing="") %>%
+  add_column(meaneasting="")
 
+DataAllSites3$meannorthing<-ifelse((DataAllSites3$ProjectID == '1400' | DataAllSites3$ProjectID == '1404'),
+                                                                      DataAllSites3$meannorthing.y,
+                                                                      DataAllSites3$meannorthing.x)
 
-#Select columsn
+DataAllSites3$meaneasting<-ifelse((DataAllSites3$ProjectID == '1400' | DataAllSites3$ProjectID == '1404'),
+                                                                     DataAllSites3$meaneasting.y,
+                                                                     DataAllSites3$meaneasting.x)
+
+#Select columns that are useful for GIS analysis
 DataAllSites4 <-
-  select (DataAllSites3, 1:7, 10:13, 16:33, 23:33, 44:45) %>%
-  replace_na(list(Biface = 0, Flake = 0.5, Flake_cortical = 0.5, Flake_retouched = 0.5, 
-                  Point_BaseNotched = 0.5, Point_CornerNotched = 0.5, Point_Lanceolate = 0.5, Point_SideNotched = 0.5, Point_Stemmed =0.5,
-                  Point_Triangular = 0.5, Point_Unid = 0.5, Shatter = 0.5, Tool_Unid = 0.5)) %>%
-  add_column(Area=ifelse((DataAllSites4$ProjectID == '1400' | DataAllSites4$ProjectID == '1404'),
+  select(DataAllSites3, 1:7, 10:13, 16:33, 23:33, 44:45) %>%
+  replace_na(list(Biface = 0, Flake = 0, Flake_cortical = 0, Flake_retouched = 0, 
+                  Point_BaseNotched = 0, Point_CornerNotched = 0, Point_Lanceolate = 0, Point_SideNotched = 0, Point_Stemmed =0,
+                  Point_Triangular = 0, Point_Unid = 0, Shatter = 0, Tool_Unid = 0))
+
+DataAllSites4$Area=ifelse((DataAllSites4$ProjectID == '1400' | DataAllSites4$ProjectID == '1404'),
                          paste('MBY'),
                          ifelse((DataAllSites4$ProjectID == '1410' | DataAllSites4$ProjectID == '1412' | DataAllSites4$ProjectID == '1402'),
                                 paste('FH'),
                                 paste('FQ')
-                         ))) 
+                         ))
 
+
+#create object for GIS kriging, start by selecting only First Hermitage sites and get rid of a bunch of extraneous columns
 FirstHermGIS<-filter(DataAllSites4, Area == 'FH') %>%
   na.omit() %>%
   select(1:3,8:10,17,29:31) 
 
-FirstHermGIS2<-filter(DataAllSites4, Area == 'FH') %>%
-  na.omit() %>%
-  select(1:2, 17, 29)
+#pairing it down to only a few columns to do data check on count
+#FirstHermGIS2<-filter(DataAllSites4, Area == 'FH') %>%
+#  na.omit() %>%
+#  select(1:2, 17, 29)
 
-FirstHermGIS2$QuadratID2<-as.factor(FirstHermGIS2$QuadratID2) 
-
+#have to detach plyr package because otherwise it prevents the group_by/summarise functions from working
 detach(package:plyr)
 FirstHermGIS3<- FirstHermGIS2 %>%
   group_by(QuadratID2)%>%
   summarise(count=sum(Flake))
 
+#another way of checking for issues with northing and easting coords
+#QuadAvg<-FirstHermGIS %>%
+#  group_by(ProjectID, QuadratID2, meannorthing, meaneasting, area) %>%
+#  summarise(count=sum(Flake))
 
-%>%
-  group_by(QuadratID2)%>%
-  summarise(area_quad=max(area),
-            northingdim=max(northingdim),
-            eastingdim=max(eastingdim),
-            meannorthing=max(meannorthing),
-            meaneasting=max(meaneasting))
+#create object for gis analysis
+#summarise count by quadratid, add .5 to counts to get rid of zeros (ArcGIS can't handle zeros)
+#then calculate densities
+FirstHermGIS4<- FirstHermGIS %>%
+  group_by(ProjectID, ProjectName, QuadratID2, meannorthing, meaneasting, area)%>%
+  summarise(count=sum(Flake)) %>%
+  mutate(count = count + .5) %>%
+  mutate(FlakeDensity = count/area) 
 
-  mutate(FlakeDensity = Flake/area) %>%
+#checking for duplicate quad ids
+duplicated(FirstHermGIS4$QuadratID2)
+  
+write.csv(FirstHermGIS4, 'FirstHermFlakeDensity2.csv')
+
+#now doing the same analysis for the field quarter
+
+#create object for gis analysis
+#summarise count by quadratid, add .5 to counts to get rid of zeros (ArcGIS can't handle zeros)
+#then calculate densities
+FieldQuarterGIS<-filter(DataAllSites4, Area == 'FQ') %>%
+  na.omit() %>%
+  select(1:3,8:10,17,29:31) %>%
+  group_by(ProjectID, ProjectName, QuadratID2, meannorthing, meaneasting, area) %>%
+  summarise(count=sum(Flake)) %>%
+  mutate(count = count + .5) %>%
+  mutate(FlakeDensity = count/area) 
+
+#checking for duplicate quad ids
+duplicated(FieldQuarterGIS$QuadratID2)
+
+write.csv(FieldQuarterGIS, 'FieldQuarterFlakeDensity.csv')
 
 
-write.csv(FirstHerm, 'FirstHermFlakes.csv')
+#now doing the same analysis for the MBY
 
+#create object for gis analysis
+#summarise count by quadratid, add .5 to counts to get rid of zeros (ArcGIS can't handle zeros)
+#then calculate densities
+MBYGIS<-filter(DataAllSites4, Area == 'MBY') %>%
+  select(1:3,8:10,17,29:31) %>%
+  na.omit() %>%
+  group_by(ProjectID, ProjectName, QuadratID2, meannorthing, meaneasting, area) %>%
+  summarise(count=sum(Flake)) %>%
+  mutate(count = count + .5) %>%
+  mutate(FlakeDensity = count/area) 
 
-                        
+#checking for duplicate quad ids
+duplicated(MBYGIS$QuadratID2)
+
+write.csv(MBYGIS, 'MBYFlakeDensity.csv')
+
