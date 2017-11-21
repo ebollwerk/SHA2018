@@ -44,8 +44,9 @@ ORDER BY
 "public"."tblContext"."ContextID" ASC
 ')
 
-require (dplyr)
-require (tidyr)
+require(dplyr)
+require(plyr)
+require(tidyr)
 
 #Have to get rid of forms with commas because they will become column names later in code
 LithicData$Form[LithicData$Form == "Flake, retouched"] <- "Flake_retouched"
@@ -119,9 +120,6 @@ ORDER BY
 ')
 write.csv(SpatialData, 'LithicsSpatialData.csv')
 
-require (dplyr)
-require (tidyr)
-
 #Remove clean up/out of strat context deposits
 SpatialData <- filter(SpatialData, DepositType != 'Clean-Up/Out-of-Stratigraphic Context'& DepositType != 'Surface Collection')
 
@@ -177,7 +175,8 @@ require(tibble)
 #merge new Northings and Eastings with original dataset
 #if unit is one from triplex or yard cabin put meannorthing, easting from spreadsheet, otherwise put in northing easting from
 #original dataset
-YC_Tri_Coord<-rename(YC_Tri_Coord, QuadratID2 = QuadID)
+#have to specify which package to use with rename because plyr and dplyr don't work well together
+YC_Tri_Coord<-dplyr::rename(YC_Tri_Coord, QuadratID2 = QuadID)
 DataAllSites2<-filter(DataAllSites, UnitType == 'Quadrat/Unit')
 DataAllSites3<-left_join(DataAllSites2, YC_Tri_Coord, by="QuadratID2") %>%
   add_column(meannorthing="") %>%
@@ -194,16 +193,18 @@ DataAllSites3$meaneasting<-ifelse((DataAllSites3$ProjectID == '1400' | DataAllSi
 
 
 DataAllSites4 <-
-  select (DataAllSites3, 1:7, 10:13, 16:33, 23:33, 44:45) 
+  select (DataAllSites3, 1:7, 10:13, 16:33, 23:33, 44:45) %>%
+  replace_na(list(Biface = 0, Flake = 0.5, Flake_cortical = 0.5, Flake_retouched = 0.5, 
+                  Point_BaseNotched = 0.5, Point_CornerNotched = 0.5, Point_Lanceolate = 0.5, Point_SideNotched = 0.5, Point_Stemmed =0.5,
+                  Point_Triangular = 0.5, Point_Unid = 0.5, Shatter = 0.5, Tool_Unid = 0.5)) %>%
+  add_column(Area=ifelse((DataAllSites4$ProjectID == '1400' | DataAllSites4$ProjectID == '1404'),
+                         paste('MBY'),
+                         ifelse((DataAllSites4$ProjectID == '1410' | DataAllSites4$ProjectID == '1412' | DataAllSites4$ProjectID == '1402'),
+                                paste('FH'),
+                                paste('FQ')
+                         ))) 
 
-#figure out how to replace NAs with zeros only for certain columns
-replace_na(list(16:28 = 0))
 
-#Get rid of the NAs in Total column
-Site6ALL[is.na(Site6ALL)] <- 0
-
-#This step adds 0.5 to all counts for kriging! 
-Site6ALL[,6] <- Site6ALL[,6] + 0.5
 
 
 write.csv(DataAllSites, 'DataAllSites.csv')
