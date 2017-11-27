@@ -49,7 +49,7 @@ require(tidyr)
 #CeramicData2 <- ddply(CeramicData, .(ContextID, CeramicMaterial), summarise, Count=sum(Count))
 #reshape data
 #CeramicData3<-CeramicData2 %>%
-#  spread(Form, Count)
+#spread(Form, Count)
 
 
 SpatialData<-dbGetQuery(DRCcon,'
