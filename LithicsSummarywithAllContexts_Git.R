@@ -1,3 +1,6 @@
+#R code for analysis of lithic assemblages from the Hermitage
+#Created by: EAB 11/18/2017
+#Last Update: EAB 11/22/2017
 #load the library
 library(DBI)
 require(RPostgreSQL)
@@ -60,6 +63,7 @@ LithicData$Form[LithicData$Form == "Point, triangular"] <- "Point_Triangular"
 LithicData$Form[LithicData$Form == "Point, lanceolate"] <- "Point_Lanceolate"
 LithicData$Form[LithicData$Form == "Point, unidentified"] <- "Point_Unid"
 LithicData$Form[LithicData$Form == "Tool, unidentified"] <- "Tool_Unid"
+
 
 LithicData2 <- ddply(LithicData, .(ContextID, Form), summarise, Count=sum(Count))
 #reshape data
@@ -211,7 +215,7 @@ DataAllSites4 <-
                                 paste('FQ')
                          )))
 
-
+#---------------------------Creating Objects for Kriging
 #create object for GIS kriging, start by selecting only First Hermitage sites and get rid of a bunch of extraneous columns
 FirstHermGIS<-filter(DataAllSites4, Area == 'FH') %>%
   select(1:3,8:25) 
@@ -285,3 +289,50 @@ duplicated(MBYGIS$QuadratID2)
 
 write.csv(MBYGIS, 'MBYFlakeDensity.csv')
 
+#--------------------------Point Analysis Data------------------------
+#Calculating Projectile Point densities for First Hermitage, same process as with flakes but with points
+FirstHermPoints<-filter(DataAllSites4, Area == 'FH') %>%
+  select(1:3,12:18,21:25) %>%
+  group_by(ProjectID, ProjectName, QuadratID2, meannorthing, meaneasting, area_update) %>%
+  #summarise statement sums all point counts
+  summarise(PointCount=sum(Point_BaseNotched, Point_SideNotched, Point_CornerNotched, Point_Lanceolate, Point_Stemmed, Point_Triangular, Point_Unid)) %>%
+  mutate(PointCount = PointCount + .5) %>%
+  mutate(PointDensity = PointCount/area_update) %>%
+  na.omit()
+
+#checking for duplicate quad ids
+duplicated(FirstHermPoints$QuadratID2)
+
+write.csv(FirstHermPoints, 'FirstHermPoints.csv')
+
+
+#Calculating Projectile Point densities for Field Quarter, same process as with flakes but with points
+FieldQuarterPoints<-filter(DataAllSites4, Area == 'FQ') %>%
+  select(1:3,12:18,21:25) %>%
+  group_by(ProjectID, ProjectName, QuadratID2, meannorthing, meaneasting, area_update) %>%
+  #summarise statement sums all point counts
+  summarise(PointCount=sum(Point_BaseNotched, Point_SideNotched, Point_CornerNotched, Point_Lanceolate, Point_Stemmed, Point_Triangular, Point_Unid)) %>%
+  mutate(PointCount = PointCount + .5) %>%
+  mutate(PointDensity = PointCount/area_update) %>%
+  na.omit()
+
+#checking for duplicate quad ids
+duplicated(FieldQuarterPoints$QuadratID2)
+
+write.csv(FieldQuarterPoints, 'FieldQuarterPoints.csv')
+
+
+#Calculating Projectile Point densities for MBY, same process as with flakes but with points
+MBYPoints<-filter(DataAllSites4, Area == 'MBY') %>%
+  select(1:3,12:18,21:25) %>%
+  group_by(ProjectID, ProjectName, QuadratID2, meannorthing, meaneasting, area_update) %>%
+  #summarise statement sums all point counts
+  summarise(PointCount=sum(Point_BaseNotched, Point_SideNotched, Point_CornerNotched, Point_Lanceolate, Point_Stemmed, Point_Triangular, Point_Unid)) %>%
+  mutate(PointCount = PointCount + .5) %>%
+  mutate(PointDensity = PointCount/area_update) %>%
+  na.omit()
+
+#checking for duplicate quad ids
+duplicated(MBYPoints$QuadratID2)
+
+write.csv(MBYPoints, 'MBYPoints.csv')
