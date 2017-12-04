@@ -99,4 +99,80 @@ duplicated(MBYSTPLithicData$ContextID)
 #write out file for ArcGIS
 write.csv(MBYSTPLithicData, 'MBYSTPLithicData.csv')
 
+#---------------------------Ceramics----------------------------------------#
+MBYSTPCeramicData<-dbGetQuery(DRCcon,'
+                         SELECT
+                        "public"."tblContext"."ContextID",
+                        "public"."tblProjectName"."ProjectName",
+                        "public"."tblCeramicMaterial"."CeramicMaterial",
+                        SUM("public"."tblCeramic"."Quantity") as "REW_Count"
+                        FROM
+                        "public"."tblProject"
+                        LEFT JOIN "public"."tblProjectName" ON "public"."tblProject"."ProjectNameID" = "public"."tblProjectName"."ProjectNameID"
+                        INNER JOIN "public"."tblContext" ON "public"."tblContext"."ProjectID" = "public"."tblProject"."ProjectID"
+                        INNER JOIN "public"."tblContextSample" ON "public"."tblContextSample"."ContextAutoID" = "public"."tblContext"."ContextAutoID"
+                        INNER JOIN "public"."tblGenerateContextArtifactID" ON "public"."tblContextSample"."ContextSampleID" = "public"."tblGenerateContextArtifactID"."ContextSampleID"
+                        INNER JOIN "public"."tblCeramic" ON "public"."tblCeramic"."GenerateContextArtifactID" = "public"."tblGenerateContextArtifactID"."GenerateContextArtifactID"
+                        INNER JOIN "public"."tblCeramicWare" ON "public"."tblCeramic"."WareID" = "public"."tblCeramicWare"."WareID"
+                        INNER JOIN "public"."tblCeramicMaterial" ON "public"."tblCeramic"."CeramicMaterialID" = "public"."tblCeramicMaterial"."CeramicMaterialID"
+                        LEFT JOIN "public"."tblContextFeatureType" ON "public"."tblContext"."FeatureTypeID" = "public"."tblContextFeatureType"."FeatureTypeID"
+                        
+                        WHERE
+                        (("public"."tblCeramicMaterial"."CeramicMaterial" = \'Refined EW\') and
+                        ("public"."tblProject"."ProjectID" in (\'1408\')))
+                        Group by "public"."tblContext"."ContextID",
+                        "public"."tblProjectName"."ProjectName",
+                        "public"."tblCeramicMaterial"."CeramicMaterial"                        
+                        Order by "public"."tblContext"."ContextID"
+                        ')
 
+
+MBYSTPCeramicData2<-left_join(MBYSpatialData2, MBYSTPCeramicData, by='ContextID') %>%
+  select(1,4:5,10) %>%
+  replace_na(list(REW_Count=0)) %>%
+  mutate(REW_Count = REW_Count + .5)
+
+#check for duplicate ContextIDs
+duplicated(MBYSTPCeramicData2$ContextID)
+
+#write out file for ArcGIS
+write.csv(MBYSTPCeramicData2, 'MBYSTPCeramicData2.csv')
+
+
+#--------------------------------Glass----------------------------------------------
+
+GlassSTPData<-dbGetQuery(DRCcon,'
+                         SELECT
+                         "public"."tblContext"."ContextID",
+                         "public"."tblProjectName"."ProjectName",
+                         "public"."tblGlassMaterial"."GlassMaterial",
+                         SUM("public"."tblGlass"."Quantity") as "Glass_Count"
+                         FROM
+                         "public"."tblProject"
+                         LEFT JOIN "public"."tblProjectName" ON "public"."tblProject"."ProjectNameID" = "public"."tblProjectName"."ProjectNameID"
+                         INNER JOIN "public"."tblContext" ON "public"."tblContext"."ProjectID" = "public"."tblProject"."ProjectID"
+                         INNER JOIN "public"."tblContextSample" ON "public"."tblContextSample"."ContextAutoID" = "public"."tblContext"."ContextAutoID"
+                         INNER JOIN "public"."tblGenerateContextArtifactID" ON "public"."tblContextSample"."ContextSampleID" = "public"."tblGenerateContextArtifactID"."ContextSampleID"
+                         INNER JOIN "public"."tblGlass" ON "public"."tblGlass"."GenerateContextArtifactID" = "public"."tblGenerateContextArtifactID"."GenerateContextArtifactID"
+                         INNER JOIN "public"."tblGlassMaterial" ON "public"."tblGlass"."GlassMaterialID" = "public"."tblGlassMaterial"."GlassMaterialID"
+                         LEFT JOIN "public"."tblContextFeatureType" ON "public"."tblContext"."FeatureTypeID" = "public"."tblContextFeatureType"."FeatureTypeID"                           WHERE
+                         ("public"."tblContext"."ProjectID" = \'1408\' and "public"."tblGlassMaterial"."GlassMaterial" = \'Non-Lead\') 
+                         Group by "public"."tblContext"."ContextID",
+                         "public"."tblProjectName"."ProjectName",
+                         "public"."tblGlassMaterial"."GlassMaterial"   
+                         ORDER BY
+                         "public"."tblContext"."ContextID" ASC
+                         ')
+
+#No need to reshape, only one form
+
+MBYSTPGlassData<-left_join(MBYSpatialData2, GlassSTPData, by='ContextID') %>%
+  select(1,4:5,10) %>%
+  replace_na(list(Glass_Count = 0)) %>%
+  mutate(Glass_Count = Glass_Count + .5)
+
+#check for duplicate ContextIDs
+duplicated(MBYSTPGlassData$ContextID)
+
+#write out file for ArcGIS
+write.csv(MBYSTPGlassData, 'MBYSTPGlassData.csv')
