@@ -13,7 +13,7 @@ DRCcon<-dbConnect(pgSQL, host=connection$host, port=connection$port,
                   dbname=connection$dbname,
                   user=connection$user, password=connection$password)
 
-LithicSTPData<-dbGetQuery(DRCcon,'
+PrehistoricSTPData<-dbGetQuery(DRCcon,'
 SELECT
                        "public"."tblContext"."ContextID",
                        Sum("i"."Quantity") AS "Count",
@@ -35,7 +35,7 @@ SELECT
                        INNER JOIN "public"."tblGenArtifactManuTech" as "n" ON "m"."GenArtifactManuTechID" = "n"."GenArtifactManuTechID"
                        WHERE
                        "public"."tblProject"."ProjectID" in (\'1409\') AND ("k"."GenArtifactForm" LIKE (\'Flake%\') OR
-                       "k"."GenArtifactForm" LIKE (\'Point%\') OR "k"."GenArtifactForm" = (\'Shatter\') OR "k"."GenArtifactForm" IN (\'Abrader\', \'Adze\', \'Biface\', \'Blank, stone tool\', \'Gorget\',\'Uniface\') OR ("k"."GenArtifactForm" = \'Tool, unidentified\' AND "ma"."GenArtifactMaterialType" IN (\'Chert/Flint, grey/black\', \'Chert/Flint, other\', \'Stone, unidentified\', \'Stone, unid sedimentary\', \'Stone, unid metamorphic\')))
+                       "k"."GenArtifactForm" LIKE (\'Point%\') OR "k"."GenArtifactForm" IN (\'Shatter\', \'Abrader\', \'Adze\', \'Biface\', \'Blank, stone tool\', \'Gorget\',\'Uniface\',\'Tool, unidentified\', \'Scraper\', \'Grinding Stone\', \'Drill\',\'Core\',\'Hammerstone\')))
                        GROUP BY
                        "public"."tblContext"."ContextID",
                        "k"."GenArtifactForm",
@@ -46,15 +46,20 @@ SELECT
                        "public"."tblContext"."ContextID" ASC
                        ')
 
+#summarize data by form to see what forms are present
+PrehistoricSTPDataSum<-group_by(PrehistoricSTPData, Form) %>% 
+  summarise(Count=sum(Count))
 
 require(dplyr)
 require(tidyr)
 
 #Have to get rid of forms with commas because they will become column names later in code
-LithicSTPData$Form[LithicSTPData$Form == "Flake, cortical"] <- "Flake_cortical"
-LithicSTPData$Form[LithicSTPData$Form == "Point, corner notched"] <- "Point_CornerNotched"
-LithicSTPData$Form[LithicSTPData$Form == "Point, stemmed"] <- "Point_Stemmed"
-LithicSTPData$Form[LithicSTPData$Form == "Point, unidentified"] <- "Point_Unid"
+PrehistoricSTPData$Form[PrehistoricSTPData$Form == "Flake, cortical"] <- "Flake_cortical"
+PrehistoricSTPData$Form[PrehistoricSTPData$Form == "Point, corner notched"] <- "Point_CornerNotched"
+PrehistoricSTPData$Form[PrehistoricSTPData$Form == "Point, stemmed"] <- "Point_Stemmed"
+PrehistoricSTPData$Form[PrehistoricSTPData$Form == "Point, unidentified"] <- "Point_Unid"
+PrehistoricSTPData$Form[PrehistoricSTPData$Form == "Grinding Stone"] <-'Grinding_Stone'
+
 
 
 FQSpatialData <-dbGetQuery(DRCcon,'
@@ -76,24 +81,41 @@ FQSpatialData <-dbGetQuery(DRCcon,'
 #Rename N and E
 colnames(FQSpatialData)<- c("ContextID","Northing","Easting")
 #reshape data
-LithicSTPData2<-LithicSTPData %>%
+PrehistoricSTPData2<-PrehistoricSTPData %>%
   spread(Form, Count)
 
-
-CombinedLithicSTPData<-left_join(FQSpatialData, LithicSTPData2, by='ContextID') %>%
-  select(1:3, 7:13) %>%
-  replace_na(list(Biface = 0, Flake = 0, Flake_cortical = 0, 
+####Lithic Analysis####
+#All prehistoric material
+CombinedPrehistoricSTPData<-left_join(FQSpatialData, PrehistoricSTPData2, by='ContextID') %>%
+  select(ContextID, Northing, Easting, Biface, Core, Flake, Flake_cortical, Point_CornerNotched, Point_Stemmed,
+         Point_Unid, Shatter) %>%
+  replace_na(list(Biface = 0, Core = 0, Flake = 0, Flake_cortical = 0, 
                   Point_CornerNotched = 0,
                   Point_Stemmed = 0, Point_Unid = 0, Shatter = 0)) %>%
   group_by(ContextID, Northing, Easting) %>%
-  summarise(Count=sum(Biface,Flake,Flake_cortical,Point_CornerNotched,Point_Stemmed,Point_Unid,Shatter)) %>%
+  summarise(Count=sum(Biface,Core,Flake,Flake_cortical,Point_CornerNotched,Point_Stemmed,Point_Unid,Shatter)) %>%
   mutate(Count = Count + .5)
 
-duplicated(CombinedLithicSTPData$ContextID)
+duplicated(CombinedPrehistoricSTPData$ContextID)
   
-write.csv(CombinedLithicSTPData, 'CombinedSTPData_AllLithics.csv')
+write.csv(CombinedPrehistoricSTPData, 'CombinedPrehistoricSTPData.csv')
 
-#-------------------------------------------ceramic Analysis----------------------------------------------------
+#Just Debitage
+
+DebitageSTPData<-left_join(FQSpatialData, PrehistoricSTPData2, by='ContextID') %>%
+  select(ContextID, Northing, Easting, Core, Flake, Flake_cortical, Shatter) %>%
+  replace_na(list(Core = 0, Flake = 0, Flake_cortical = 0, 
+                  Shatter = 0)) %>%
+  group_by(ContextID, Northing, Easting) %>%
+  summarise(Count=sum(Flake,Flake_cortical,Shatter)) %>%
+  mutate(Count = Count + .5)
+
+duplicated(DebitageSTPData$ContextID)
+
+write.csv(DebitageSTPData, 'FQDebitageSTPData.csv')
+
+
+####Ceramic Analysis####
 CeramicSTPData<-dbGetQuery(DRCcon,'
                          SELECT
                         "public"."tblContext"."ContextID",
@@ -131,7 +153,7 @@ duplicated(CombinedCeramicSTPData$ContextID)
 
 write.csv(CombinedREWSTPData, 'CombinedSTPData_REW.csv')
 
-#-------------------------------------------Glass Analysis----------------------------------------------------
+####Glass Analysis####
 GlassSTPData<-dbGetQuery(DRCcon,'
                          SELECT
                         "public"."tblContext"."ContextID",
