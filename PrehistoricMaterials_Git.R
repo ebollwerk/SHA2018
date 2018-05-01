@@ -1,10 +1,12 @@
 #R code for analysis of lithic assemblages from the Hermitage
 #Created by: EAB 11/18/2017
-#Last Update: EAB 11/22/2017
-#load the library
+#Last Update: EAB 5/1/2018
+#load all the libraries we need for code
 library(DBI)
-require(RPostgreSQL)
+library(RPostgreSQL)
 library(RODBC)
+library(dplyr)
+library(tidyr)
 
 ####Query for prehistoric data from DAACS####
 # tell DBI which driver to use
@@ -50,9 +52,6 @@ PrehistoricData<-dbGetQuery(DRCcon,'
                        ')
 
 #require(plyr)
-require(dplyr)
-require(tidyr)
-
 #summarize data by form
 PrehistoricDataSum<-group_by(PrehistoricData, Form) %>% 
 summarise(Count=sum(Count))
