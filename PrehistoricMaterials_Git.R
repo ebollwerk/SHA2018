@@ -51,7 +51,6 @@ PrehistoricData<-dbGetQuery(DRCcon,'
                        "public"."tblContext"."ContextID" ASC
                        ')
 
-#require(plyr)
 #summarize data by form
 PrehistoricDataSum<-group_by(PrehistoricData, Form) %>% 
 summarise(Count=sum(Count))
